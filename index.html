@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#080b12">
+  <title>世伊娘の兴隆山大冒险</title>
+  <link rel="preload" href="fonts/WenQuanYi/WenQuanYi%20Bitmap%20Song%2016px.ttf" as="font" type="font/ttf" crossorigin>
+  <style>
+    @font-face { font-family: WenQuanYi; src: url('fonts/WenQuanYi/WenQuanYi%20Bitmap%20Song%2016px.ttf') format('truetype'); font-display: block; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; width: 100%; height: 100%; background: #080b12; overflow: hidden; }
+    body { color: #e6edf5; font-family: WenQuanYi, sans-serif; font-size: 18px; touch-action: none; }
+    #game-frame {
+      position: fixed;
+      inset: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+    }
+    #canvas { display: block; width: 100%; height: 100%; border: 0; outline: none; }
+    #status, #rotation { position: fixed; inset: 0; display: grid; place-content: center; gap: 20px; text-align: center; }
+    #status { background: #080b12; z-index: 1; padding: 24px; }
+    #status-progress { width: 240px; max-width: 70vw; accent-color: #eacb62; }
+    #status-notice { max-width: 560px; line-height: 1.5; white-space: pre-line; }
+    #rotation { display: none; background: #080b12; z-index: 2; padding: 24px; }
+    #rotation-symbol { font-family: system-ui, sans-serif; font-size: 56px; color: #eacb62; }
+    #rotation p { margin: 0; font-size: 36px; }
+    #rotation-fullscreen { justify-self: center; width: 48px; height: 48px; border: 1px solid #34415d; border-radius: 0; background: #111623; color: #e6edf5; font-family: system-ui, sans-serif; font-size: 28px; cursor: pointer; }
+    #rotation-fullscreen[hidden] { display: none; }
+    #rotation-fullscreen:focus-visible { outline: 2px solid #eacb62; outline-offset: 3px; }
+    @media (orientation: portrait) {
+      #game-frame { right: auto; bottom: auto; width: 640px; height: 360px; visibility: hidden; }
+      #rotation { display: grid; }
+    }
+  </style>
+  <link id="-gd-engine-icon" rel="icon" type="image/png" href="index.icon.png" />
+<link rel="apple-touch-icon" href="index.apple-touch-icon.png"/>
+
+</head>
+<body>
+  <div id="game-frame"><canvas id="canvas" tabindex="0">浏览器不支持游戏画布。</canvas></div>
+  <div id="status" role="status">
+    <progress id="status-progress" aria-label="加载游戏"></progress>
+    <div id="status-notice" hidden></div>
+  </div>
+  <div id="rotation" role="dialog" aria-modal="true" aria-label="请横屏游玩">
+    <div id="rotation-symbol" aria-hidden="true">&#x21BB;</div>
+    <p>请横屏游玩</p>
+    <button id="rotation-fullscreen" type="button" aria-label="全屏" hidden>&#x26F6;</button>
+  </div>
+  <noscript>请启用 JavaScript。</noscript>
+  <script src="index.js"></script>
+  <script>
+    // Set an absolute HTTPS API URL here when the leaderboard is hosted separately.
+    window.QUIZ_RANK_API_BASE = window.QUIZ_RANK_API_BASE || '';
+    const GODOT_CONFIG = {"args":[],"canvasResizePolicy":0,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":true,"fileSizes":{"index.pck":11313720,"index.wasm":37902138},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
+    const GODOT_THREADS_ENABLED = false;
+    const canvas = document.getElementById('canvas');
+    const frame = document.getElementById('game-frame');
+    const rotation = document.getElementById('rotation');
+    const portrait = matchMedia('(orientation: portrait)');
+    const rotationFullscreen = document.getElementById('rotation-fullscreen');
+
+    const layout = window.quizWebLayout = {
+      canFullscreen: Boolean(document.fullscreenEnabled && document.documentElement.requestFullscreen),
+      rotationRequired: portrait.matches,
+      async toggleFullscreen() {
+        try {
+          if (document.fullscreenElement) {
+            await document.exitFullscreen();
+          } else {
+            await document.documentElement.requestFullscreen();
+            if (screen.orientation && screen.orientation.lock) {
+              try { await screen.orientation.lock('landscape'); } catch (_) { /* Manual rotation remains available. */ }
+            }
+          }
+        } catch (_) { /* Browsers may reject fullscreen without an active gesture. */ }
+      }
+    };
+    rotationFullscreen.hidden = !layout.canFullscreen;
+    rotationFullscreen.addEventListener('click', () => layout.toggleFullscreen());
+
+    function resizeCanvas() {
+      const density = window.devicePixelRatio || 1;
+      const width = Math.max(1, Math.round(frame.clientWidth * density));
+      const height = Math.max(1, Math.round(frame.clientHeight * density));
+      if (canvas.width !== width) canvas.width = width;
+      if (canvas.height !== height) canvas.height = height;
+    }
+    new ResizeObserver(resizeCanvas).observe(frame);
+    window.addEventListener('resize', resizeCanvas);
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    function syncOrientation() {
+      layout.rotationRequired = portrait.matches;
+      canvas.inert = portrait.matches;
+      canvas.tabIndex = portrait.matches ? -1 : 0;
+      rotation.setAttribute('aria-hidden', String(!portrait.matches));
+      if (portrait.matches) canvas.blur();
+      else canvas.focus({ preventScroll: true });
+    }
+    portrait.addEventListener('change', syncOrientation);
+    syncOrientation();
+    // Block keyboard actions in the hidden game during rotation.
+    document.addEventListener('keydown', event => {
+      if (layout.rotationRequired && event.target !== rotationFullscreen) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+    }, true);
+
+    GODOT_CONFIG.canvas = canvas;
+    GODOT_CONFIG.focusCanvas = !layout.rotationRequired;
+    const engine = new Engine(GODOT_CONFIG);
+    const status = document.getElementById('status');
+    const progress = document.getElementById('status-progress');
+    const notice = document.getElementById('status-notice');
+    function failure(error) {
+      console.error(error);
+      progress.hidden = true;
+      notice.hidden = false;
+      notice.textContent = error instanceof Error ? error.message : String(error);
+    }
+    const missing = Engine.getMissingFeatures({ threads: GODOT_THREADS_ENABLED });
+    if (missing.length) {
+      failure('浏览器缺少运行支持：\n' + missing.join('\n'));
+    } else {
+      engine.startGame({ onProgress(current, total) {
+        if (total > 0) { progress.value = current; progress.max = total; }
+        else progress.removeAttribute('value');
+      } }).then(() => { status.remove(); syncOrientation(); }, failure);
+    }
+  </script>
+</body>
+</html>
+
