@@ -9,107 +9,289 @@
   <style>
     @font-face { font-family: WenQuanYi; src: url('fonts/WenQuanYi/WenQuanYi%20Bitmap%20Song%2016px.ttf') format('truetype'); font-display: block; }
     * { box-sizing: border-box; }
-    html, body { margin: 0; width: 100%; height: 100%; background: #080b12; overflow: hidden; }
-    body { color: #e6edf5; font-family: WenQuanYi, sans-serif; font-size: 18px; touch-action: none; }
-    #game-frame {
+    html, body { margin: 0; width: 100%; height: 100%; background: #080b12; overflow: hidden; overscroll-behavior: none; }
+    body { position: fixed; inset: 0; color: #e6edf5; font-family: WenQuanYi, sans-serif; font-size: 18px; }
+    #viewport {
       position: fixed;
       inset: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+      overflow: hidden;
     }
-    #canvas { display: block; width: 100%; height: 100%; border: 0; outline: none; }
-    #status, #rotation { position: fixed; inset: 0; display: grid; place-content: center; gap: 20px; text-align: center; }
+    #game-frame { position: absolute; left: 50%; top: 50%; transform-origin: center; }
+    #canvas { display: block; width: 100%; height: 100%; border: 0; outline: none; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+    #status { position: absolute; inset: 0; display: grid; place-content: center; gap: 20px; text-align: center; }
     #status { background: #080b12; z-index: 1; padding: 24px; }
     #status-progress { width: 240px; max-width: 70vw; accent-color: #eacb62; }
     #status-notice { max-width: 560px; line-height: 1.5; white-space: pre-line; }
-    #rotation { display: none; background: #080b12; z-index: 2; padding: 24px; }
-    #rotation-symbol { font-family: system-ui, sans-serif; font-size: 56px; color: #eacb62; }
-    #rotation p { margin: 0; font-size: 36px; }
-    #rotation-fullscreen { justify-self: center; width: 48px; height: 48px; border: 1px solid #34415d; border-radius: 0; background: #111623; color: #e6edf5; font-family: system-ui, sans-serif; font-size: 28px; cursor: pointer; }
-    #rotation-fullscreen[hidden] { display: none; }
-    #rotation-fullscreen:focus-visible { outline: 2px solid #eacb62; outline-offset: 3px; }
-    @media (orientation: portrait) {
-      #game-frame { right: auto; bottom: auto; width: 640px; height: 360px; visibility: hidden; }
-      #rotation { display: grid; }
-    }
+    #keyboard-cover { position: fixed; inset: 0; z-index: 10; background: #080b12b8; touch-action: none; }
+    #keyboard-cover[hidden] { display: none; }
+    #keyboard-card { position: fixed; left: var(--edit-left); top: var(--edit-top); width: var(--edit-width); height: 112px; padding: 8px 12px; background: #ead5a5; border: 2px solid #8d704b; color: #382c27; }
+    #keyboard-card header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    #keyboard-done { min-width: 64px; min-height: 44px; padding: 4px 12px; border: 2px solid #8d704b; border-radius: 0; background: #f4e8ce; color: #382c27; font: 18px WenQuanYi, sans-serif; touch-action: manipulation; }
+    #keyboard-done:active { background: #d8bd84; }
+    body > input, body > textarea { font-size: 16px; }
+    .quiz-native-input { position: fixed !important; left: calc(var(--edit-left) + 12px) !important; top: calc(var(--edit-top) + 60px) !important; width: calc(var(--edit-width) - 24px) !important; height: 40px !important; z-index: 11 !important; padding: 4px 8px !important; border: 2px solid #8d704b !important; border-radius: 0; background: #f9efd8 !important; color: #382c27; font: 20px WenQuanYi, sans-serif; touch-action: auto; }
   </style>
   <link id="-gd-engine-icon" rel="icon" type="image/png" href="index.icon.png" />
 <link rel="apple-touch-icon" href="index.apple-touch-icon.png"/>
 
 </head>
 <body>
-  <div id="game-frame"><canvas id="canvas" tabindex="0">浏览器不支持游戏画布。</canvas></div>
-  <div id="status" role="status">
-    <progress id="status-progress" aria-label="加载游戏"></progress>
-    <div id="status-notice" hidden></div>
-  </div>
-  <div id="rotation" role="dialog" aria-modal="true" aria-label="请横屏游玩">
-    <div id="rotation-symbol" aria-hidden="true">&#x21BB;</div>
-    <p>请横屏游玩</p>
-    <button id="rotation-fullscreen" type="button" aria-label="全屏" hidden>&#x26F6;</button>
+  <div id="viewport">
+    <div id="game-frame">
+      <canvas id="canvas" tabindex="0">浏览器不支持游戏画布。</canvas>
+      <div id="status" role="status">
+        <progress id="status-progress" aria-label="加载游戏"></progress>
+        <div id="status-notice" hidden></div>
+      </div>
+    </div>
   </div>
   <noscript>请启用 JavaScript。</noscript>
+  <div id="keyboard-cover" hidden>
+    <section id="keyboard-card" aria-label="玩家名字">
+      <header><label id="keyboard-label">玩家名字 ID</label><button id="keyboard-done" type="button">完成</button></header>
+    </section>
+  </div>
   <script src="index.js"></script>
   <script>
     // Set an absolute HTTPS API URL here when the leaderboard is hosted separately.
     window.QUIZ_RANK_API_BASE = 'https://shiyi-acg-quiz-d9g7yozc701ac0027-1507320843.ap-shanghai.app.tcloudbase.com/api';
-    const GODOT_CONFIG = {"args":[],"canvasResizePolicy":0,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":true,"fileSizes":{"index.pck":11313720,"index.wasm":37902138},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
+    const GODOT_CONFIG = {"args":[],"canvasResizePolicy":0,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":true,"fileSizes":{"index.pck":11314296,"index.wasm":37902138},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
     const GODOT_THREADS_ENABLED = false;
     const canvas = document.getElementById('canvas');
     const frame = document.getElementById('game-frame');
-    const rotation = document.getElementById('rotation');
-    const portrait = matchMedia('(orientation: portrait)');
-    const rotationFullscreen = document.getElementById('rotation-fullscreen');
+    const viewport = document.getElementById('viewport');
+    const keyboardCover = document.getElementById('keyboard-cover');
+    const mobile = matchMedia('(pointer: coarse)').matches || /Android|iPhone|iPad|iPod/.test(navigator.userAgent);
+    let mobileSize = null;
+    let lastArea = null;
+    let editingInput = null;
+    let keyboardArea = null;
+    let keyboardTimer = 0;
+    let keyboardWindowWidth = 0;
+    let resizePending = false;
 
+    const fullscreenElement = () => document.fullscreenElement || document.webkitFullscreenElement;
+    const requestFullscreen = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
     const layout = window.quizWebLayout = {
-      canFullscreen: Boolean(document.fullscreenEnabled && document.documentElement.requestFullscreen),
-      rotationRequired: portrait.matches,
+      canFullscreen: Boolean(requestFullscreen && (document.fullscreenEnabled || document.webkitFullscreenEnabled)),
+      rotated: false,
+      mobile,
+      density: Math.max(1, mobile ? Math.min(2, window.devicePixelRatio || 1) : window.devicePixelRatio || 1),
+      keyboard: false,
+      orientationLocked: false,
+      async lockLandscape() {
+        try {
+          if (screen.orientation && screen.orientation.lock) {
+            await screen.orientation.lock('landscape');
+            this.orientationLocked = true;
+            return;
+          }
+        } catch (_) { /* The rotated canvas also works without orientation APIs. */ }
+        this.orientationLocked = false;
+      },
       async toggleFullscreen() {
         try {
-          if (document.fullscreenElement) {
-            await document.exitFullscreen();
+          finishKeyboard();
+          if (fullscreenElement()) {
+            await (document.exitFullscreen || document.webkitExitFullscreen).call(document);
           } else {
-            await document.documentElement.requestFullscreen();
-            if (screen.orientation && screen.orientation.lock) {
-              try { await screen.orientation.lock('landscape'); } catch (_) { /* Manual rotation remains available. */ }
-            }
+            await requestFullscreen.call(document.documentElement);
+            await this.lockLandscape();
           }
         } catch (_) { /* Browsers may reject fullscreen without an active gesture. */ }
       }
     };
-    rotationFullscreen.hidden = !layout.canFullscreen;
-    rotationFullscreen.addEventListener('click', () => layout.toggleFullscreen());
-
+    function visibleArea() {
+      const rect = viewport.getBoundingClientRect();
+      const visual = window.visualViewport;
+      const left = Math.max(rect.left, visual ? visual.offsetLeft : 0);
+      const top = Math.max(rect.top, visual ? visual.offsetTop : 0);
+      const right = Math.min(rect.right, visual ? visual.offsetLeft + visual.width : innerWidth);
+      const bottom = Math.min(rect.bottom, visual ? visual.offsetTop + visual.height : innerHeight);
+      return { left, top, width: Math.max(1, right - left), height: Math.max(1, bottom - top) };
+    }
     function resizeCanvas() {
-      const density = window.devicePixelRatio || 1;
-      const width = Math.max(1, Math.round(frame.clientWidth * density));
-      const height = Math.max(1, Math.round(frame.clientHeight * density));
-      if (canvas.width !== width) canvas.width = width;
-      if (canvas.height !== height) canvas.height = height;
+      const visible = visibleArea();
+      updateKeyboard(visible);
+      const area = keyboardArea || visible;
+      lastArea = area;
+      if (!keyboardArea) layout.rotated = area.height > area.width;
+      const width = layout.rotated ? area.height : area.width;
+      const height = Math.min(layout.rotated ? area.width : area.height, width * 0.75);
+      const minimumScale = Math.min(1, width / 640, height / 320);
+      if (mobile && !mobileSize) mobileSize = { width: Math.round(width / minimumScale), height: Math.round(height / minimumScale) };
+      // Browser chrome and keyboards must not rebuild the mobile Godot scene tree.
+      layout.width = mobileSize ? mobileSize.width : Math.round(width / minimumScale);
+      layout.height = mobileSize ? mobileSize.height : Math.round(height / minimumScale);
+      layout.scale = Math.min(width / layout.width, height / layout.height);
+      const parent = viewport.getBoundingClientRect();
+      frame.style.left = (area.left - parent.left + area.width / 2) + 'px';
+      frame.style.top = (area.top - parent.top + area.height / 2) + 'px';
+      frame.style.width = layout.width + 'px';
+      frame.style.height = layout.height + 'px';
+      const transform = 'translate(-50%, -50%) rotate(' + (layout.rotated ? 90 : 0) + 'deg) scale(' + layout.scale + ')';
+      if (frame.style.transform !== transform) cancelTouches();
+      frame.style.transform = transform;
+      const pixelsWidth = Math.max(1, Math.round(layout.width * layout.density));
+      const pixelsHeight = Math.max(1, Math.round(layout.height * layout.density));
+      if (canvas.width !== pixelsWidth) canvas.width = pixelsWidth;
+      if (canvas.height !== pixelsHeight) canvas.height = pixelsHeight;
     }
-    new ResizeObserver(resizeCanvas).observe(frame);
-    window.addEventListener('resize', resizeCanvas);
-    if (window.visualViewport) window.visualViewport.addEventListener('resize', resizeCanvas);
-    resizeCanvas();
-
-    function syncOrientation() {
-      layout.rotationRequired = portrait.matches;
-      canvas.inert = portrait.matches;
-      canvas.tabIndex = portrait.matches ? -1 : 0;
-      rotation.setAttribute('aria-hidden', String(!portrait.matches));
-      if (portrait.matches) canvas.blur();
-      else canvas.focus({ preventScroll: true });
-    }
-    portrait.addEventListener('change', syncOrientation);
-    syncOrientation();
-    // Block keyboard actions in the hidden game during rotation.
-    document.addEventListener('keydown', event => {
-      if (layout.rotationRequired && event.target !== rotationFullscreen) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
+    function scheduleResize() {
+      // WebKit may delay animation frames during orientation and keyboard changes.
+      resizeCanvas();
+      if (!resizePending) {
+        resizePending = true;
+        requestAnimationFrame(() => { resizePending = false; resizeCanvas(); });
       }
-    }, true);
+    }
+    function updateKeyboard(area) {
+      if (!editingInput) return;
+      const width = Math.max(1, Math.min(560, area.width - 16));
+      document.body.style.setProperty('--edit-left', (area.left + (area.width - width) / 2) + 'px');
+      document.body.style.setProperty('--edit-top', (area.top + 4) + 'px');
+      document.body.style.setProperty('--edit-width', width + 'px');
+    }
+    function finishKeyboard() {
+      if (editingInput) editingInput.blur();
+      canvas.focus({ preventScroll: true });
+    }
+    document.addEventListener('focusin', event => {
+      if (!mobile || !event.target.matches('input, textarea')) return;
+      clearTimeout(keyboardTimer);
+      editingInput = event.target;
+      keyboardWindowWidth = innerWidth;
+      keyboardArea = keyboardArea || lastArea;
+      layout.keyboard = true;
+      editingInput.classList.add('quiz-native-input');
+      editingInput.setAttribute('aria-labelledby', 'keyboard-label');
+      editingInput.setAttribute('enterkeyhint', 'done');
+      editingInput.setAttribute('autocomplete', 'off');
+      editingInput.maxLength = 16;
+      keyboardCover.hidden = false;
+      updateKeyboard(visibleArea());
+    });
+    document.addEventListener('focusout', event => {
+      if (event.target !== editingInput) return;
+      editingInput.classList.remove('quiz-native-input');
+      editingInput = null;
+      keyboardCover.hidden = true;
+      layout.keyboard = false;
+      // Wait for the keyboard closing animation before fitting the canvas again.
+      keyboardTimer = setTimeout(() => { keyboardArea = null; window.scrollTo(0, 0); scheduleResize(); }, 400);
+    });
+    document.getElementById('keyboard-done').addEventListener('pointerdown', event => event.preventDefault());
+    document.getElementById('keyboard-done').addEventListener('mousedown', event => event.preventDefault());
+    document.getElementById('keyboard-done').addEventListener('touchend', event => {
+      event.preventDefault();
+      finishKeyboard();
+    }, { passive: false });
+    document.getElementById('keyboard-done').addEventListener('click', finishKeyboard);
+
+    const activeTouches = new Map();
+    const cancelledTouches = new Set();
+    function cancelTouches() {
+      if (!activeTouches.size) return;
+      if (typeof layout.cancelGameTouches === 'function') layout.cancelGameTouches();
+      const changedTouches = Array.from(activeTouches.keys(), identifier => {
+        cancelledTouches.add(identifier);
+        return { identifier, target: canvas, clientX: -10000, clientY: -10000 };
+      });
+      activeTouches.clear();
+      const event = new Event('touchcancel', { bubbles: true, cancelable: true });
+      Object.assign(event, { quizCancelled: true, touches: [], targetTouches: [], changedTouches });
+      canvas.dispatchEvent(event);
+    }
+    function trackTouches(event) {
+      if (event.target !== canvas || event.quizCancelled) return;
+      const changed = Array.from(event.changedTouches);
+      if (event.type === 'touchstart') for (const touch of changed) cancelledTouches.delete(touch.identifier);
+      const accepted = changed.filter(touch => !cancelledTouches.has(touch.identifier));
+      for (const touch of accepted) {
+        if (event.type === 'touchend' || event.type === 'touchcancel') activeTouches.delete(touch.identifier);
+        else activeTouches.set(touch.identifier, touch);
+      }
+      if (accepted.length !== changed.length) {
+        if (!accepted.length) { event.preventDefault(); event.stopImmediatePropagation(); return; }
+        Object.defineProperty(event, 'changedTouches', { value: accepted, configurable: true });
+      }
+    }
+    for (const type of ['touchstart', 'touchmove', 'touchend', 'touchcancel']) {
+      window.addEventListener(type, trackTouches, { capture: true, passive: false });
+    }
+
+    // Godot normalizes input against the transformed bounding box, without rotation.
+    function enginePoint(point, rect) {
+      return {
+        clientX: rect.left + (point.clientY - rect.top) * rect.width / rect.height,
+        clientY: rect.top + (rect.right - point.clientX) * rect.height / rect.width
+      };
+    }
+    function rotateInput(event) {
+      if (!layout.rotated || (event.changedTouches && event.target !== canvas)) return;
+      const rect = canvas.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      if (event.changedTouches) {
+        for (const name of ['touches', 'targetTouches', 'changedTouches']) {
+          const touches = Array.from(event[name], point => ({ identifier: point.identifier,
+            target: point.target, ...enginePoint(point, rect) }));
+          touches.item = index => touches[index] || null;
+          Object.defineProperty(event, name, { value: touches, configurable: true });
+        }
+      } else {
+        const point = enginePoint(event, rect);
+        const movementX = event.movementY * rect.width / rect.height;
+        const movementY = -event.movementX * rect.height / rect.width;
+        Object.defineProperties(event, {
+          clientX: { value: point.clientX, configurable: true },
+          clientY: { value: point.clientY, configurable: true },
+          movementX: { value: movementX, configurable: true },
+          movementY: { value: movementY, configurable: true }
+        });
+      }
+    }
+    for (const type of ['mousedown', 'mouseup', 'pointermove', 'touchstart', 'touchmove', 'touchend', 'touchcancel']) {
+      window.addEventListener(type, rotateInput, { capture: true, passive: true });
+    }
+    // Keep the browser's hidden keyboard/IME controls outside the rotated container.
+    new MutationObserver(records => {
+      for (const record of records) for (const node of record.addedNodes) {
+        if (node.nodeType === Node.ELEMENT_NODE && node.matches('input, textarea, .ime')) document.body.appendChild(node);
+      }
+    }).observe(frame, { childList: true });
+
+    new ResizeObserver(scheduleResize).observe(viewport);
+    window.addEventListener('resize', scheduleResize);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', scheduleResize);
+      window.visualViewport.addEventListener('scroll', scheduleResize);
+    }
+    for (const type of ['fullscreenchange', 'webkitfullscreenchange']) {
+      document.addEventListener(type, () => { scheduleResize(); layout.lockLandscape(); });
+    }
+    window.addEventListener('orientationchange', () => {
+      cancelTouches();
+      if (!editingInput || Math.abs(innerWidth - keyboardWindowWidth) > 80) finishKeyboard();
+      scheduleResize();
+    });
+    window.addEventListener('pageshow', scheduleResize);
+    window.addEventListener('blur', cancelTouches);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) { cancelTouches(); finishKeyboard(); }
+      else scheduleResize();
+    });
+    canvas.addEventListener('contextmenu', event => event.preventDefault());
+    for (const type of ['gesturestart', 'gesturechange', 'gestureend']) {
+      document.addEventListener(type, event => {
+        if (event.target === canvas) event.preventDefault();
+      }, { passive: false });
+    }
+    resizeCanvas();
+    layout.lockLandscape();
+    window.addEventListener('pointerdown', () => layout.lockLandscape(), { once: true, passive: true });
 
     GODOT_CONFIG.canvas = canvas;
-    GODOT_CONFIG.focusCanvas = !layout.rotationRequired;
+    GODOT_CONFIG.focusCanvas = true;
     const engine = new Engine(GODOT_CONFIG);
     const status = document.getElementById('status');
     const progress = document.getElementById('status-progress');
@@ -127,7 +309,7 @@
       engine.startGame({ onProgress(current, total) {
         if (total > 0) { progress.value = current; progress.max = total; }
         else progress.removeAttribute('value');
-      } }).then(() => { status.remove(); syncOrientation(); }, failure);
+      } }).then(() => { status.remove(); resizeCanvas(); canvas.focus({ preventScroll: true }); }, failure);
     }
   </script>
 </body>
