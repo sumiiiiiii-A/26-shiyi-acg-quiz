@@ -1,68 +1,103 @@
-// Diagnostic snippet injected into the game's own page.
-// It runs in the SAME realm as the game, so it can wrap fetch and report every
-// leaderboard request/response into a visible panel - no DevTools needed.
+// Diagnostic v2: in addition to logging network traffic, this actively probes
+// the backend for SHAPE variations and reports exactly what each returns, so we
+// can find which shape the game's parser accepts.
 (function () {
-  var BACKEND = 'https://shiyi-acg-quiz-d9g7yozc701ac0027-1507320843.ap-shanghai.app.tcloudbase.com';
+  var BACKEND_PLACEHOLDER = 'window.QUIZ_RANK_API_BASE';
+  var base = (window.QUIZ_RANK_API_BASE || '').replace(/\/+$/, '');
 
   var box = document.createElement('div');
   box.id = '__rankdiag';
   box.style.cssText = [
-    'position:fixed', 'left:0', 'right:0', 'bottom:0', 'max-height:52vh', 'overflow-y:auto',
+    'position:fixed', 'left:0', 'right:0', 'bottom:0', 'max-height:58vh', 'overflow-y:auto',
     'z-index:2147483647', 'background:#0b0f1a', 'color:#e6edf5',
     'font:12px/1.5 ui-monospace,Consolas,monospace', 'padding:8px 10px',
     'border-top:2px solid #eacb62', 'white-space:pre-wrap', 'word-break:break-all'
   ].join(';');
-  box.innerHTML = '<b style="color:#eacb62">排行榜诊断已开启</b> —— 进游戏打开排行榜，这里会记录每一次请求。\n'
-    + '<span id="__rankdiaglog"></span>';
+  box.innerHTML = '<b style="color:#eacb62">排行榜诊断 v2</b>  <span id="__rankdiaglog"></span>';
   function attach() { if (document.body) document.body.appendChild(box); else setTimeout(attach, 50); }
   attach();
 
-  var log = function (s, color) {
+  function log(s, color) {
     var el = document.getElementById('__rankdiaglog');
     if (!el) return;
     var line = document.createElement('div');
     if (color) line.style.color = color;
-    line.textContent = '[' + new Date().toLocaleTimeString() + '] ' + s;
+    line.textContent = s;
     el.appendChild(line);
     box.scrollTop = box.scrollHeight;
-  };
+  }
 
   var origFetch = window.fetch.bind(window);
   window.fetch = function (input, init) {
     var url = typeof input === 'string' ? input : (input && input.url) || String(input);
     var method = ((init && init.method) || (input && input.method) || 'GET').toUpperCase();
-    var interesting = /tcloudbase|leaderboard|scores|\/api/i.test(url);
-
-    if (!interesting) return origFetch(input, init);
+    if (!/tcloudbase|\/api\/|leaderboard|scores/i.test(url)) return origFetch(input, init);
 
     var t0 = Date.now();
     log('→ ' + method + ' ' + url, '#8fd0ff');
-    if (init && init.body) log('   请求体: ' + String(init.body).slice(0, 300));
-
     return origFetch(input, init).then(function (res) {
-      var ms = Date.now() - t0;
-      var cors = res.headers.get('access-control-allow-origin') || '(无)';
-      log('← ' + res.status + '  ' + ms + 'ms  CORS:' + cors,
-        res.ok ? '#7fdc9b' : '#ff8b8b');
-      var clone = res.clone();
-      clone.text().then(function (t) {
-        if (t) log('   响应: ' + t.slice(0, 600));
+      log('← ' + res.status + ' ' + (Date.now() - t0) + 'ms', res.ok ? '#7fdc9b' : '#ff8b8b');
+      var c = res.clone();
+      c.text().then(function (t) {
+        log('   原始文本(前700): ' + t.slice(0, 700), '#9aa7bd');
+        // show what a parser sees, field by field
+        try {
+          var j = JSON.parse(t);
+          if (j && j.entries) {
+            log('   解析结果: total=' + j.total + ' offset=' + j.offset
+              + ' entries=' + j.entries.length
+              + ' player_best=' + JSON.stringify(j.player_best)
+              + ' updated=' + j.updated, '#9aa7bd');
+            if (j.entries[0]) {
+              log('   第1条字段: ' + Object.keys(j.entries[0]).join(', ')
+                + '  →  ' + JSON.stringify(j.entries[0]), '#9aa7bd');
+              log('   各字段类型: ' + Object.keys(j.entries[0]).map(function (k) {
+                return k + ':' + (typeof j.entries[0][k]);
+              }).join(', '), '#9aa7bd');
+            }
+          } else {
+            log('   解析结果没有 entries 字段！顶层键: ' + Object.keys(j || {}).join(', '), '#ff8b8b');
+          }
+        } catch (e) {
+          log('   JSON.parse 失败: ' + e.message, '#ff8b8b');
+        }
       }).catch(function () {});
       return res;
     }).catch(function (e) {
-      var ms = Date.now() - t0;
-      log('✗ 请求失败 ' + ms + 'ms  ' + (e && e.message ? e.message : String(e)), '#ff8b8b');
+      log('✗ 失败 ' + (Date.now() - t0) + 'ms ' + (e && e.message ? e.message : e), '#ff8b8b');
       throw e;
     });
   };
 
   window.addEventListener('error', function (e) {
-    log('✗ JS 错误: ' + (e.message || '') + ' @' + (e.filename || '') + ':' + (e.lineno || ''), '#ff8b8b');
+    log('✗ JS 错误: ' + (e.message || ''), '#ff8b8b');
   });
   window.addEventListener('unhandledrejection', function (e) {
-    log('✗ 未处理的 Promise 拒绝: ' + (e.reason && e.reason.message ? e.reason.message : String(e.reason)), '#ff8b8b');
+    log('✗ Promise 拒绝: ' + (e.reason && e.reason.message ? e.reason.message : String(e.reason)), '#ff8b8b');
   });
 
-  log('后端地址(window.QUIZ_RANK_API_BASE) = ' + (window.QUIZ_RANK_API_BASE || '(空)'), '#eacb62');
-  log('fetch 已被拦截，等待游戏的请求…');
+  log('base = ' + (base || '(空)'), '#eacb62');
+  void BACKEND_PLACEHOLDER;
+
+  // --- active probes: which response SHAPE does the parser accept? -----------
+  function probe(label, params) {
+    var url = base + '/leaderboard?offset=0&limit=20&player_id=' + encodeURIComponent(params || '');
+    return origFetch(url).then(function (r) {
+      return r.text().then(function (t) {
+        var n = 0, fields = '';
+        try {
+          var j = JSON.parse(t);
+          n = j.entries ? j.entries.length : -1;
+          fields = j.entries && j.entries[0] ? Object.keys(j.entries[0]).join('+') : '(无条目)';
+        } catch (e) { fields = 'PARSE FAIL'; }
+        log('PROBE ' + label + ' → ' + r.status + ' 条数=' + n + ' 字段=' + fields, '#c9a44a');
+        return t;
+      });
+    });
+  }
+
+  setTimeout(function () {
+    log('--- 主动探测不同的响应形状 ---', '#eacb62');
+    probe('原样', '');
+  }, 3000);
 })();
