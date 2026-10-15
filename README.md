@@ -1,55 +1,58 @@
-# 世伊娘の兴隆山大冒险 — 网页版
+# 世伊娘の兴隆山大冒险 · 26百团答题小游戏 — 网页版
 
-This is the HTML5/WebAssembly build of the Godot 4.7.2 game
-**世伊娘の兴隆山大冒险** (Shii-onna's Xinglong Mountain Adventure).
+这是 **26百团答题小游戏 WebVer1.1** 的在线版本，用 Godot Engine 4.7.2 制作。
 
-原版是一个 Godot Engine 4.7.2 的 Windows 游戏，这里是用官方 Web 导出模板
-配合原版 `index.pck` 生成的网页版。
+- 在线游玩：<https://sumiiiiiii-A.github.io/26-shiyi-acg-quiz/>
+- 手机支持横屏适配（竖屏时会提示旋转屏幕）
+- 建议使用支持 WebAssembly 的现代浏览器（Chrome / Edge / Firefox / Safari）
 
-## 运行方式
+## 关于本仓库
 
-这是纯静态站点，但 `.wasm` / `.pck` 必须通过 HTTP 提供
-（直接双击 `index.html` 用 `file://` 打开浏览器会拒绝加载），
-并且服务器需要：
+本仓库只存放**构建产物**，用于 GitHub Pages 静态托管：
 
-* `.wasm` 以 `application/wasm` 返回
-* 建议开启 gzip：`index.wasm` 37.7 MB → 9.6 MB
+| 文件 | 说明 |
+| --- | --- |
+| `index.html` | 自定义页面外壳（加载进度、横屏提示、全屏按钮） |
+| `index.js` | Godot Web 运行时加载器 |
+| `index.wasm` | Godot 引擎（WebAssembly，37.9 MB，托管方自动 gzip 到 ~9.8 MB） |
+| `index.pck` | 游戏内容（11.3 MB） |
+| `index.audio.*.worklet.js` | 音频 worklet |
+| `index.icon.png` / `index.apple-touch-icon.png` / `index.png` | 图标 |
+| `fonts/WenQuanYi/` | 页面用的位图字体 |
+| `licenses/`, `OFL-font.txt` | 第三方字体与素材许可证 |
 
-### GitHub Pages
+构建时附带的 `.gz` 副本没有上传 —— GitHub Pages 会自己 gzip，同时上传两份
+只会让仓库体积翻倍。
 
-启用 Pages 后即可访问：
-
-```
-https://<username>.github.io/<repo-name>/
-```
-
-GitHub Pages 自动满足上面的条件（会正确返回 `application/wasm`，并自动 gzip）。
-
-### 本地预览
-
-```powershell
-python serve.py 8731
-# 打开 http://127.0.0.1:8731/
-```
-
-## 文件说明
-
-| 文件 | 大小 | 说明 |
-| --- | --- | --- |
-| `index.html` | 5.4 KB | 入口页面 |
-| `index.js` | 273 KB | Godot Web 运行时加载器 |
-| `index.wasm` | 37.7 MB | Godot 引擎（WebAssembly） |
-| `index.pck` | 10.5 MB | **游戏内容**（原版 pack，未修改） |
-| `index.audio.worklet.js` | 7.1 KB | 音频 worklet |
-| `index.audio.position.worklet.js` | 2.9 KB | 音频定位 worklet |
-| `.nojekyll` | 0 B | 让 GitHub Pages 跳过 Jekyll 处理 |
-
-## 技术细节
+## 技术说明
 
 * 引擎版本：Godot **4.7.2** stable
-* 渲染后端：GL Compatibility（Web 必须）
-* 分辨率：1280 × 720（项目设置里的 viewport 尺寸）
-* 模板：`web_nothreads_release`（不依赖 SharedArrayBuffer，
-  所以不需要 COOP/COEP 隔离响应头，静态托管直接可用）
+* 渲染后端：GL Compatibility
+* 设计分辨率：1280 × 720（横屏）
+* Web 模板：`web_nothreads_release`（不依赖 SharedArrayBuffer，
+  因此不需要 COOP/COEP 隔离响应头，普通静态托管即可运行）
 
-原版 `index.pck` 里的 145 个资源文件 MD5 全部校验通过，未做任何修改。
+原版 `index.pck` 已做 SHA256 校验，托管副本与原始文件**逐字节一致**。
+
+## 排行榜后端
+
+页面里预留了 `window.QUIZ_RANK_API_BASE`（当前为空）。
+如果排行榜需要独立后端，把它的地址填进 `index.html` 里这一行即可：
+
+```js
+window.QUIZ_RANK_API_BASE = window.QUIZ_RANK_API_BASE || '';
+```
+
+留空时排行榜走同源请求；如果服务端不存在，请求会返回 404，
+属于正常降级，不影响游戏主体。
+
+## 本地运行
+
+浏览器不允许通过 `file://` 加载 WebAssembly 和 `.pck`，必须用 HTTP 服务器：
+
+```bash
+python -m http.server 8731
+# 然后打开 http://127.0.0.1:8731/
+```
+
+注意服务器要把 `.wasm` 以 `application/wasm` 返回。
