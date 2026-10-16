@@ -1,6 +1,6 @@
 # 世伊娘の兴隆山大冒险 · 26百团答题小游戏 — 网页版
 
-这是 **26百团答题小游戏 WebVer1.11** 的在线版本，用 Godot Engine 4.7.2 制作。
+这是 **26百团答题小游戏 WebVer1.12** 的在线版本，用 Godot Engine 4.7.2 制作。
 
 - 在线游玩：<https://sumiiiiiii-A.github.io/26-shiyi-acg-quiz/>
 - 手机支持横屏适配（竖屏时自动旋转画面，而不是简单提示）
@@ -46,11 +46,13 @@ window.QUIZ_RANK_API_BASE = 'https://shiyi-acg-quiz-d9g7yozc701ac0027-1507320843
 
 数据存在 CloudBase 的 SQL 型数据库（PostgreSQL）里，经由 PostgREST Data API 访问。
 
-> **不需要跨域代理。** 实测从 `github.io` 直连该地址，读取和写入都正常
-> （CloudBase 网关在此环境下未拦截跨域）。
+> **不需要跨域代理。** 实测从 `github.io` 直连该地址，读取和写入都正常。
 >
 > 接口返回的每条记录**必须包含 `elapsed_ms`**（`player_id / score / elapsed_ms / rank`
 > 四字段）。缺了这个字段，游戏会显示「排行榜暂不可用」而不是报错 —— 这个坑踩过一次。
+>
+> 1.12 起客户端会给排行榜请求加一个缓存穿透参数 `&_fresh=<时间戳>`，
+> 后端忽略它即可（已验证不影响任何返回字段）。
 
 如果以后换了环境，只要把第 57 行改成新的后端地址就行。
 
